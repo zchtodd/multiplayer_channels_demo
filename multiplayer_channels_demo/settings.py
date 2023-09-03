@@ -24,9 +24,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = "django-insecure-x53exx7c!aly%hqr-%6jq2inkllb&ogtz%=duco&vuj$sa1c+v"
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["circumeo.io"]
 
 
 # Application definition
