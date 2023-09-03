@@ -1,0 +1,21 @@
+version: "3.7"
+
+services:
+  app:
+    build:
+      context: .
+    restart: unless-stopped
+    command: daphne multiplayer_channels_demo.asgi:application -u /usr/src/app/daphne.sock
+    volumes:
+      - $PWD:/usr/src/app
+
+  nginx:
+    image: nginx:latest
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - $PWD:/usr/src/app
+    depends_on:
+      - app
