@@ -1,6 +1,7 @@
 import json
 import uuid
 import threading
+import asyncio
 import math
 
 from channels.generic.websocket import WebsocketConsumer
@@ -8,10 +9,11 @@ from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 
 class MultiplayerConsumer(WebsocketConsumer):
-    game_group_name = "game_group"
-    players = {}
     MAX_SPEED = 5
     THRUST = 0.2
+
+    game_group_name = "game_group"
+    players = {}
 
     update_lock = threading.Lock()
 
@@ -77,8 +79,8 @@ class MultiplayerConsumer(WebsocketConsumer):
             )
         )
 
-    def game_loop(self):
-        def loop():
+    async def game_loop(self):
+        async def loop():
             while len(self.players) > 0:
                 with self.update_lock:
                     for player in self.players.values():
@@ -101,6 +103,6 @@ class MultiplayerConsumer(WebsocketConsumer):
                     self.game_group_name,
                     {"type": "state_update", "objects": list(self.players.values())},
                 )
-                threading.Event().wait(0.05)
+                await asyncio.sleep(0.05)
 
-        threading.Thread(target=loop).start()
+        asyncio.create_task(loop())
