@@ -1,6 +1,7 @@
 import json
 import uuid
 import threading
+import asyncio
 import math
 
 from channels.generic.websocket import WebsocketConsumer
@@ -8,10 +9,13 @@ from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 
 class MultiplayerConsumer(WebsocketConsumer):
-    game_group_name = "game_group"
-    players = {}
     MAX_SPEED = 5
     THRUST = 0.2
+
+    game_group_name = "game_group"
+    players = {}
+
+    lock = asyncio.Lock()
 
     def connect(self):
         self.player_id = str(uuid.uuid4())
@@ -73,29 +77,30 @@ class MultiplayerConsumer(WebsocketConsumer):
             )
         )
 
-    def game_loop(self):
-        def loop():
+    async def game_loop(self):
+        async def loop():
             while len(self.players) > 0:
-                for player in self.players.values():
-                    if player["thrusting"]:
-                        dx = self.THRUST * math.cos(player["facing"])
-                        dy = self.THRUST * math.sin(player["facing"])
-                        player["dx"] += dx
-                        player["dy"] += dy
+                async with self.lock:
+                    for player in self.players.values():
+                        if player["thrusting"]:
+                            dx = self.THRUST * math.cos(player["facing"])
+                            dy = self.THRUST * math.sin(player["facing"])
+                            player["dx"] += dx
+                            player["dy"] += dy
 
-                        speed = math.sqrt(player["dx"]**2 + player["dy"]**2)
-                        if speed > self.MAX_SPEED:
-                            ratio = self.MAX_SPEED / speed
-                            player["dx"] *= ratio
-                            player["dy"] *= ratio
+                            speed = math.sqrt(player["dx"]**2 + player["dy"]**2)
+                            if speed > self.MAX_SPEED:
+                                ratio = self.MAX_SPEED / speed
+                                player["dx"] *= ratio
+                                player["dy"] *= ratio
 
-                    player["x"] += player["dx"]
-                    player["y"] += player["dy"]
+                        player["x"] += player["dx"]
+                        player["y"] += player["dy"]
 
                 async_to_sync(self.channel_layer.group_send)(
                     self.game_group_name,
                     {"type": "state_update", "objects": list(self.players.values())},
                 )
-                threading.Event().wait(0.05)
+                await asyncio.sleep(0.05)
 
-        threading.Thread(target=loop).start()
+        asyncio.create_task(loop())
