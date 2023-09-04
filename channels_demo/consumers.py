@@ -1,12 +1,11 @@
 import json
 import uuid
 import threading
-import asyncio
 import math
 
 from channels.generic.websocket import WebsocketConsumer
-from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
+
 
 class MultiplayerConsumer(WebsocketConsumer):
     MAX_SPEED = 5
@@ -79,8 +78,8 @@ class MultiplayerConsumer(WebsocketConsumer):
             )
         )
 
-    async def game_loop(self):
-        async def loop():
+    def game_loop(self):
+        def loop():
             while len(self.players) > 0:
                 with self.update_lock:
                     for player in self.players.values():
@@ -90,7 +89,7 @@ class MultiplayerConsumer(WebsocketConsumer):
                             player["dx"] += dx
                             player["dy"] += dy
 
-                            speed = math.sqrt(player["dx"]**2 + player["dy"]**2)
+                            speed = math.sqrt(player["dx"] ** 2 + player["dy"] ** 2)
                             if speed > self.MAX_SPEED:
                                 ratio = self.MAX_SPEED / speed
                                 player["dx"] *= ratio
@@ -103,6 +102,6 @@ class MultiplayerConsumer(WebsocketConsumer):
                     self.game_group_name,
                     {"type": "state_update", "objects": list(self.players.values())},
                 )
-                await asyncio.sleep(0.05)
+                threading.Event().wait(0.05)
 
-        asyncio.create_task(loop())
+        threading.Thread(target=loop).start()
