@@ -13,6 +13,8 @@ class MultiplayerConsumer(WebsocketConsumer):
     MAX_SPEED = 5
     THRUST = 0.2
 
+    update_lock = threading.Lock()
+
     def connect(self):
         self.player_id = str(uuid.uuid4())
         self.accept()
@@ -25,22 +27,24 @@ class MultiplayerConsumer(WebsocketConsumer):
             text_data=json.dumps({"type": "playerId", "playerId": self.player_id})
         )
 
-        self.players[self.player_id] = {
-            "id": self.player_id,
-            "x": 500,
-            "y": 500,
-            "facing": 0,
-            "dx": 0,
-            "dy": 0,
-            "thrusting": False,
-        }
+        with self.update_lock:
+            self.players[self.player_id] = {
+                "id": self.player_id,
+                "x": 500,
+                "y": 500,
+                "facing": 0,
+                "dx": 0,
+                "dy": 0,
+                "thrusting": False,
+            }
 
         if len(self.players) == 1:
             self.game_loop()
 
     def disconnect(self, close_code):
         if self.player_id in self.players:
-            del self.players[self.player_id]
+            with self.update_lock:
+                del self.players[self.player_id]
 
         async_to_sync(self.channel_layer.group_discard)(
             self.game_group_name, self.channel_name
@@ -76,21 +80,22 @@ class MultiplayerConsumer(WebsocketConsumer):
     def game_loop(self):
         def loop():
             while len(self.players) > 0:
-                for player in self.players.values():
-                    if player["thrusting"]:
-                        dx = self.THRUST * math.cos(player["facing"])
-                        dy = self.THRUST * math.sin(player["facing"])
-                        player["dx"] += dx
-                        player["dy"] += dy
+                with self.update_lock:
+                    for player in self.players.values():
+                        if player["thrusting"]:
+                            dx = self.THRUST * math.cos(player["facing"])
+                            dy = self.THRUST * math.sin(player["facing"])
+                            player["dx"] += dx
+                            player["dy"] += dy
 
-                        speed = math.sqrt(player["dx"]**2 + player["dy"]**2)
-                        if speed > self.MAX_SPEED:
-                            ratio = self.MAX_SPEED / speed
-                            player["dx"] *= ratio
-                            player["dy"] *= ratio
+                            speed = math.sqrt(player["dx"]**2 + player["dy"]**2)
+                            if speed > self.MAX_SPEED:
+                                ratio = self.MAX_SPEED / speed
+                                player["dx"] *= ratio
+                                player["dy"] *= ratio
 
-                    player["x"] += player["dx"]
-                    player["y"] += player["dy"]
+                        player["x"] += player["dx"]
+                        player["y"] += player["dy"]
 
                 async_to_sync(self.channel_layer.group_send)(
                     self.game_group_name,
